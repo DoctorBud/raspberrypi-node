@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en"
+  ng-app="App"
+  ng-controller="AppController"
+  ng-init="initFromHTML('{{ host }}', {{ port }}, {{ wsPort }}, {{ livereloadPort }})">
+
+  <head>
+    <title>Generic WS/AngularJS/Bootstrap/NodeJS/Hapi Example</title>
+    <meta http-equiv="Content-Language" content="en-us">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link href="http://fonts.googleapis.com/css?family=PT+Mono|Open+Sans:300,400,600" rel="stylesheet">
+    <style class="cursor-styles"></style>
+    <link href="/node_modules/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/node_modules/bootstrap/dist/css/bootstrap-theme.min.css" rel="stylesheet">
+    <link href="/client.css" rel="stylesheet">
+
+    <script>
+      module = {};  // Hack to allow AngularJS to be used via npm.
+    </script>
+  </head>
+
+  <body
+    style="background:lightblue;"
+    ng-controller="BodyController">
+
+    <div class="container">
+      <div class="row">
+        <button class="btn btn-default" ng-click="isCollapsed = !isCollapsed">Toggle collapse</button>
+        <hr>
+        <div collapse="isCollapsed">
+          <h3>Debug Stuff</h3>
+          <div class="well well-lg">
+            <ul>
+              <li>host: [[host]]</li>
+              <li>port: [[port]]</li>
+              <li>wsPort: [[wsPort]]</li>
+              <li>livereloadPort: [[livereloadPort]]</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <h3>Nodes</h3>
+        <ul ng-repeat="node in nodeList">
+          <li>[[node.advertisement]]</li>
+        </ul>
+      </div>
+
+      <div class="row">
+        <h3>Task</h3>
+
+        <div class="btn-group" dropdown>
+          <button type="button" class="btn btn-primary dropdown-toggle" dropdown-toggle>
+            Select Task &nbsp; &nbsp; <span class="caret"></span>
+          </button>
+
+          <ul class="dropdown-menu" role="menu">
+            <li><a ng-click="selectTask('xclock')">xclock</a></li>
+            <li><a ng-click="selectTask('xeyes')">xeyes</a></li>
+            <li class="divider"></li>
+            <li><a ng-click="selectTask('python-xclock')">Python xclock</a></li>
+            <li><a ng-click="selectTask('python-xeyes')">Python xeyes</a></li>
+            <li><a ng-click="selectTask('python-primes')">Python Primes</a></li>
+          </ul>
+        </div>
+
+        <ul>
+          <li>taskType: [[task.type]]</li>
+          <li>taskState: [[task.state]]</li>
+          <li>taskCounter: [[task.counter]]</li>
+        </ul>
+
+        <button ng-hide="task.started" ng-click="task.started = !task.started" type="button" class="btn btn-primary">
+          Start Task
+        </button>
+
+        <button ng-hide="!task.started" ng-click="task.started = !task.started" type="button" class="btn btn-primary dropdown-toggle" dropdown-toggle>
+          Stop Task
+        </button>
+
+
+      </div>
+    </div>
+
+    <script src="/node_modules/angular/angular.min.js"></script>
+    <script src="/node_modules/angular-bootstrap-npm/dist/angular-bootstrap.js"></script>
+    <script src="/client.js"></script>
+
+    <script>
+      document.write('<script src="http://'
+          + (location.host || 'localhost').split(':')[0]
+          + ':' + {{livereloadPort}} + '/livereload.js"></'
+          + 'script>');
+    </script>
+
+  </body>
+</html>
