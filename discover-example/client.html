@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <title>Generic NodeJS/Hapi Example</title>
+    <meta http-equiv="Content-Language" content="en-us">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link href="http://fonts.googleapis.com/css?family=PT+Mono|Open+Sans:300,400,600" rel="stylesheet">
+    <style class="cursor-styles"></style>
+    <link href="/node_modules/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/node_modules/bootstrap/dist/css/bootstrap-theme.min.css" rel="stylesheet">
+    <link href="/client.css" rel="stylesheet">
+  </head>
+
+  <body
+    style="background:lightblue;">
+
+    <div class="container">
+      <div class="row">
+        Nodes: <pre>{{ nodes }}</pre>
+      </div>
+    </div>
+
+    <script src="/node_modules/angular/angular.min.js"></script>
+    <script src="/node_modules/angular-bootstrap-npm/dist/angular-bootstrap.js"></script>
+    <script src="/client.js"></script>
+
+    <script>
+      window.initFromHTML('{{ host }}', {{ port }});
+    </script>
+  </body>
+</html>

@@ -1,5 +1,5 @@
 {
-  "name": "Simple Node Discovery via node-discover, with WebSocket-enabled UI",
+  "name": "Simple Node Discovery via node-discover",
   "version": "1.0.0",
   "description": "",
   "main": "server.js",
@@ -10,14 +10,10 @@
   "author": "",
   "license": "",
   "dependencies": {
-    "angular": "^1.3.36",
-    "angular-bootstrap-npm": "^0.12.2",
     "bootstrap": "^3.3.1",
     "handlebars": "^2.0.0",
     "hapi": "^8.0.0",
     "ip": "^0.3.2",
-    "livereload2": "^1.0.1",
-    "node-discover": "0.0.14",
-    "ws": "^0.6.3"
+    "node-discover": "0.0.14"
   }
 }

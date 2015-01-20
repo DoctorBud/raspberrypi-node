@@ -1,16 +1,31 @@
 ## raspberrypi-node - RaspberryPi, NodeJS, Websockets and More
 
-This repo is a log of my experiments, examples, and homework attempts for a Software Engineering class I am assisting at University of Oregon. The class goal is to explore and implement different distributed system and software engineering principles by using RaspberryPi nodes as the primary computing engines.
+This repo contains a NodeJS application (`discover-ws-http-example`) that is designed to act as a server to be installed on small devices such as RaspberryPi, as well as being able to run on any Unix-based system capable of NodeJS. This work was originally intended for a Software Engineering class I assisted at University of Oregon. The class goal was to explore and implement different distributed system and software engineering principles by using RaspberryPi nodes as the primary computing engines.
 
-The basic class will involve small teams of students solving various problems by assembling a network of Raspberry Pis, each of which will run a NodeJS server. The rPis will perform tasks, update their displays, and communicate with each other to implement distributed algorithms.
+The basic class involves small teams of students solving various problems by assembling a network of Raspberry Pis, each of which runs a NodeJS server. The rPis perform tasks, update their displays, and communicate with each other to implement distributed algorithms.
 
+
+### Components
+
+- discover-ws-http-example - This is the basic nodeJS application skeleton that is to be extended and adapted.
+- pitft-pygame - Unrelated to the above, this is an example of how to use a RaspberryPi equipped with a PiTFT LCD (from Adafruit) to display and receive touch events. I could not find a suitable NodeJS equivalent.
+
+### Features of discover-ws-http-example
+
+The application provided here is a skeleton of a full application, with only enough code to handle the following:
+
+- Serving up a UI and REST API over HTTP
+- Providing an AngularJS-based UI that can identify a node, its services, and its neighbors.
+- Providing a simple discovery mechanism so that other nodes running this same stack can detect eah other.
+- Provides a WebSocket channel to support the UI. This is primarily to allow debugging and bidirectional communication between an rPi node and its WebUI. WebSockets are not used for inter-pi communication at this time.
+- Simple examples of service invocation and background tasking.
 
 ### Quickstart Guide
 
 #### Mac/Linux
 
 ```
-cd rpi/hw1/
+cd raspberrypi-node/discover-ws-http-example/
 npm install
 node server.js
 ```
@@ -29,7 +44,7 @@ Not supported by me. Some of this might work, but I don't really think about Win
 
 ### Constraints and Goals
 
-I've spent a few weeks evaluating various techs to come up with a set of libraries and tools that will install and run effectively on the rPi without requiring excessive installation time or dependencies.
+I've spent some time evaluating various techs to come up with a set of libraries and tools that will install and run effectively on the rPi without requiring excessive installation time or dependencies.
 
  One constraint has been that the *distributed system* aspect is implemented in NodeJS, with the option of initiating and monitoring Python-based *tasks*. I've tried to choose a minimal set of technology to achieve this goal while still allowing the following capabilities:
 
@@ -38,11 +53,11 @@ I've spent a few weeks evaluating various techs to come up with a set of librari
 - Ability to send (via POST or GET) messages to other rPis.
 - Avoid inclusion of third-party libraries into the source repo, instead relying on package management (`npm` or `bower`) to pull libraries. This allows the repo to only contain source code relevant to the course and homework problems.
 - If `npm` is sufficient, then avoid the use of `bower`.
-- Ensure a rapid development cycle so that edit-save-refresh and edit-save-restart are easy. I use `livereload2` and `nodemon` to achieve this.
+- Ensure a rapid development cycle so that edit-save-refresh and edit-save-restart are easy. I use `livereload2` to achieve this for front-end editing, and `nodemon` for back-end editing.
 
 #### Non-goals
 
-The mini-apps built with this stack are designed to encourage *distributed algorithm* and *Internet of Things* experimentation, and are intended to be prototypes. Optimizations such as `grunt` or `gulp`-based minification of assets are not desired, since they potentially slow down experimentation.
+The mini-apps built with this stack are designed to encourage *distributed algorithm* and *Internet of Things* experimentation, and are intended to be prototypes. Optimizations such as `grunt` or `gulp`-based minification of assets are not desired, since they potentially slow down experimentation and increase the amount of source files needed.
 
 
 ### Backend Tech
@@ -56,11 +71,12 @@ I use the following `package.json` file to enable `npm` to pull third-party libr
 `package.json` contents:
 
 ```
-    "angular": "^1.3.8",
+    "angular": "^1.3.36",
     "angular-bootstrap-npm": "^0.12.2",
     "bootstrap": "^3.3.1",
     "handlebars": "^2.0.0",
     "hapi": "^8.0.0",
+    "ip": "^0.3.2",
     "livereload2": "^1.0.1",
     "node-discover": "0.0.14",
     "ws": "^0.6.3"
@@ -73,7 +89,7 @@ I chose to use `Hapi.js` instead of raw NodeJS for my webserver needs. Hapi seem
 
 #### node-discover
 
-Not a perfect library, but convenient for allowing rPi nodes to advertise and discover services and each other.
+Not a perfect library, but convenient for allowing rPi nodes to advertise and discover services and each other. There is a forked repo, `node-discovery`, which doesn't work as well for me.
 
 #### ws
 
