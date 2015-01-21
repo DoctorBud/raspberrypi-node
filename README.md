@@ -7,7 +7,9 @@ The basic class involves small teams of students solving various problems by ass
 
 ### Components
 
-- discover-ws-http-example - This is the basic nodeJS application skeleton that is to be extended and adapted.
+- node-discover-example - A UI-less nodeJS application based upon the node-discover README example.
+- simple-discover-ui - Extends the above with a HapiJS-served UI using browser polling.
+- discover-ws-http-example - Fancy Bootstrap/AngularJS UI with live updates via WebSockets.
 - pitft-pygame - Unrelated to the above, this is an example of how to use a RaspberryPi equipped with a PiTFT LCD (from Adafruit) to display and receive touch events. I could not find a suitable NodeJS equivalent.
 
 ### Features of discover-ws-http-example
