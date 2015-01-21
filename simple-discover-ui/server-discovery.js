@@ -10,14 +10,19 @@
 var Discover = require('node-discover');
 
 function startDiscovery(myHost, myPort, networkChange) {
+  //
+  // I found this very useful:
+  //  https://delog.wordpress.com/2014/11/15/ip-multicasting/
+  //
+
   var c = Discover(
-            {
-              // address: myHost,
-              // multicast: myHost
-            },
-            function (err) {
-                  // console.log('Discover c.me:', c.me);
-              });
+          {
+            // address: myHost,
+            multicast: '224.0.0.1'    // Special multitask address
+          },
+          function (err) {
+              console.log('\n-----\nDiscover c.me:', c.me, ' err:', err);
+          });
 
   // Let our peers know about us
   c.advertise({myHost : myHost,

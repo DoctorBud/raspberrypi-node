@@ -15,12 +15,29 @@
   </head>
 
   <body
-    style="background:lightblue;">
+    style="background:{{ backgroundColor }};">
 
     <div class="container">
       <div class="row">
-        Nodes: <pre>{{ nodes }}</pre>
+        <h4>Nodes</h4>
+
+        <ul>
+          {{#each nodes}}
+
+            <li>{{ this.advertisement.myHost }}:{{ this.advertisement.myPort }}</li>
+            <ul>
+            {{#each this}}
+                <li> {{@key}} = {{this}} </li>
+            {{/each}}
+            </ul>
+
+          {{else}}
+            <li class="empty">No nodes</li>
+          {{/each}}
+        </ul>
       </div>
+
+
     </div>
 
     <script src="/node_modules/angular/angular.min.js"></script>
@@ -29,6 +46,12 @@
 
     <script>
       window.initFromHTML('{{ host }}', {{ port }});
+
+      var timeout = setTimeout("location.reload(true);", 4000);
+      function resetTimeout() {
+        clearTimeout(timeout);
+        timeout = setTimeout("location.reload(true);", 4000);
+      }
     </script>
   </body>
 </html>

@@ -8,6 +8,7 @@
 var myHost = null;
 var myPort = null;
 var myTimer = null;
+var requestCounter = 0;
 
 var serverDiscovery = require('./server-discovery.js');
 
@@ -40,11 +41,15 @@ server.route({
     method: 'GET',
     path: '/',
     handler: function (request, reply) {
+        var backgroundColors = ['pink', 'lightsalmon', 'lightyellow', 'lightgreen', 'lightblue', 'plum'];
+        var colorIndex = (requestCounter % backgroundColors.length);
         var context = {
             host: myHost,
             port: myPort,
-            nodes: discoveredNodes
+            nodes: discoveredNodes,
+            backgroundColor: backgroundColors[colorIndex]
         };
+        requestCounter++;
 
         reply.view('client', context);
     }});

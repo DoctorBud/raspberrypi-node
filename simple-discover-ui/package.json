@@ -1,7 +1,7 @@
 {
-  "name": "Simple Node Discovery via node-discover",
+  "name": "simple-discover-ui",
   "version": "1.0.0",
-  "description": "",
+  "description": "Simple Node Discovery via node-discover with a simple UI",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -10,9 +10,9 @@
   "author": "",
   "license": "",
   "dependencies": {
-    "bootstrap": "^3.3.1",
+    "bootstrap": "^3.3.2",
     "handlebars": "^2.0.0",
-    "hapi": "^8.0.0",
+    "hapi": "^8.1.0",
     "ip": "^0.3.2",
     "node-discover": "0.0.14"
   }
