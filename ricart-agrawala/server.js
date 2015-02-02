@@ -60,14 +60,20 @@ var serverDiscovery = require('./server-discovery.js');
 var discoveryLocked = false;
 var discoveredNodes = [];
 
-function sortNodeList(nodeList) {
+function updateNodeList(nodeList) {
   var sortedList = nodeList.slice();
   sortedList.sort(
-    function(left, right)
-    {
+    function(left, right) {
       return left.advertisement.myPort > right.advertisement.myPort;
     });
-  return sortedList;
+  var result = sortedList.map(
+    function(element) {
+      var advertisement = element.advertisement;
+      var url = 'http://' + advertisement.myHost + ':' + advertisement.myPort;
+      console.log('map:', advertisement);
+      return url;
+    });
+  return result;
 }
 
 server.networkChange = function (nodeList) {
@@ -75,7 +81,7 @@ server.networkChange = function (nodeList) {
     syncLog('networkChange IGNORED. Discover is LOCKED');
   }
   else {
-    discoveredNodes = sortNodeList(nodeList);
+    discoveredNodes = updateNodeList(nodeList);
   }
 };
 ////////////////////////////////////////////////////////////////////////
@@ -142,7 +148,7 @@ var TS = 0;   // Lamport-style logical clock, incremented to T+1 upon a request 
 var numTests = 0;
 
 var entryREQUESTed = false;
-
+var numPendingREPLY = 0;
 
 function randomDelay(low, high) {
   var result = Math.floor(low + Math.random() * (high - low));
@@ -173,48 +179,70 @@ var request = require('request');
 function sendREQUEST() {
   syncLog('sendREQUEST');
   entryREQUESTed = true;
+  numPendingREPLY = discoveredNodes.length - 1;
 
-  var headers = {
-      'User-Agent':       'Super Agent/0.0.1',
-      'Content-Type':     'application/x-www-form-urlencoded'
-  };
-
-  // Configure the request
-  var options = {
-      url:      '',
-      method:   'GET',
-      headers:  headers,
-      qs:       {'key1': 'xxx', 'key2': 'yyy'}
-  };
+  function handleResponse(error, response, body) {
+    if (error || response.statusCode != 200) {
+      syncLog('    SENT sendREQUEST to ', site, ' RESPONSE:', response.body);
+    }
+  }
 
   for (var i = 0; i < discoveredNodes.length; ++i) {
-    var site = discoveredNodes[i].advertisement;
-    var url = 'http://' + site.myHost + ':' + site.myPort + '/REQUEST';
+    var site = discoveredNodes[i];
+    var url = site + '/REQUEST';
     syncLog('  sendREQUEST to ', url);
 
-    options.url = url;
-    // Start the request
-    request(options, function (error, response, body) {
-        if (!error && response.statusCode == 200) {
-          syncLog('    SENT sendREQUEST to ', site, ' RESPONSE:', response.body);
-        }
-    });
+    var options = {
+        url:      url,
+        method:   'GET',
+        headers:  {
+                      'User-Agent':       'Super Agent/0.0.1',
+                      'Content-Type':     'application/x-www-form-urlencoded'
+                  },
+        qs:       {'senderTS': 0, 'senderID': site}
+    };
+
+    request(options, handleResponse);
   }
 }
 
+function sendREPLY(targetID) {
+  syncLog('sendREPLY(', targetID, ')');
 
-function handleREQUEST(msg) {
-  syncLog('handleREQUEST:', msg.path);
+  function handleResponse(error, response, body) {
+    if (error || response.statusCode != 200) {
+      syncLog('    SENT sendREPLY to ', site, ' RESPONSE:', response.body);
+    }
+  }
+
+  var site = targetID;
+  var url = site + '/REPLY';
+  syncLog('  sendREPLY to ', url);
+
+  var options = {
+      url:      url,
+      method:   'GET',
+      headers:  {
+                    'User-Agent':       'Super Agent/0.0.1',
+                    'Content-Type':     'application/x-www-form-urlencoded'
+                },
+      qs:       {'senderTS': 0, 'senderID': 0}
+  };
+
+  request(options, handleResponse);
 }
 
-
-function sendREPLY() {
-  syncLog('sendREPLY');
+function handleREQUEST(msg) {
+  syncLog('handleREQUEST:', msg.path, ' TS:', msg.query.senderTS, ' ID:', msg.query.senderID);
+  sendREPLY(msg.query.senderID);
 }
 
 function handleREPLY(msg) {
-  syncLog('handleREPLY:', msg.path);
-  workLeave();
+  --numPendingREPLY;
+  syncLog('handleREPLY:', msg.path, ' TS:', msg.query.senderTS, ' ID:', msg.query.senderID, ' PENDING:', numPendingREPLY);
+  if (numPendingREPLY <= 0) {
+    workLeave();
+  }
 }
 
 
@@ -244,11 +272,9 @@ function delayEnterWorkLeave() {
 
 function testRA() {
   syncLog('testRA');
-  numTests = 5;
+  numTests = 1;
   delayEnterWorkLeave();
 }
-
-
 
 
 //
@@ -304,7 +330,7 @@ server.start(function () {
   // syncLog('randomDelay(5000, 100000)', randomDelay(5000, 100000));
   // process.exit();
 
-  var discoveryDelay = 1000;
+  var discoveryDelay = 5000;
   syncLog('### Discovery Initiated for ', discoveryDelay, 'ms');
 
   serverDiscovery.startDiscovery(myHost, myPort, server.networkChange);
@@ -315,7 +341,7 @@ server.start(function () {
       syncLog('### Discovery Complete and Locked. Site list is:');
 
       for (var i = 0; i < discoveredNodes.length; ++i) {
-        syncLog('   [', i, '] ', discoveredNodes[i].advertisement);
+        syncLog('   [', i, '] ', discoveredNodes[i]);
       }
 
       testRA();
