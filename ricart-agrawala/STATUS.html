@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  </head>
+
+  <body>
+    <h4>Nodes</h4>
+
+    <ul>
+      {{#each nodes}}
+
+        <li>{{ this.advertisement.myHost }}:{{ this.advertisement.myPort }}</li>
+        <ul>
+        {{#each this}}
+            <li> {{@key}} = {{this}} </li>
+        {{/each}}
+        {{#each this.advertisement}}
+            <li> - {{@key}} = {{this}} </li>
+        {{/each}}
+        </ul>
+
+      {{else}}
+        <li class="empty">No nodes</li>
+      {{/each}}
+    </ul>
+  </body>
+</html>

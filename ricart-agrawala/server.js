@@ -26,30 +26,18 @@ var util = require('util');
 var syncLogFile = 'log.txt';
 function syncLog() {  // uses 'arguments'
   var args = Array.prototype.slice.call(arguments, 0);
-  var data = '[' + myHost + ':' + myPort + '] ' + util.format(args);
+  var data = '[' + myHost + ':' + myPort + ']\n  ' + util.format(args);
   fs.appendFileSync(syncLogFile, data + '\n');
   console.log(data);
 }
 
 
 //
-// requestCounter is not part of the RA alg. It's just for animation purposes.
-// The logicalClock might eventually supplant this.
-//
-var requestCounter = 0;
-var backgroundColors = ['pink', 'lightsalmon', 'lightyellow', 'lightgreen', 'lightblue', 'plum'];
-
-
-//
 // Set up the WebUI/REST server
 //
 
-var Hapi = require('hapi');
 var Path = require('path');
 var Util = require('util');
-
-var server = new Hapi.Server();
-var c = server.connection();  // Uncomment to force port to 8000... { port: 8000 });
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -75,59 +63,6 @@ function updateNodeList(nodeList) {
     });
   return result;
 }
-
-server.networkChange = function (nodeList) {
-  if (discoveryLocked) {
-    syncLog('networkChange IGNORED. Discover is LOCKED');
-  }
-  else {
-    discoveredNodes = updateNodeList(nodeList);
-  }
-};
-////////////////////////////////////////////////////////////////////////
-
-
-
-////////////////////////////////////////////////////////////////////////
-// WebUI Stuff
-
-server.views({
-  engines: {
-    html: require('handlebars')
-  },
-
-  isCached: false,    // Useful when using livereload
-
-  path: __dirname // Path.join(__dirname, 'client')
-});
-
-server.route({
-    method: 'GET',
-    path: '/',
-    handler: function (request, reply) {
-        var colorIndex = (requestCounter % backgroundColors.length);
-        var context = {
-            host: myHost,
-            port: myPort,
-            nodes: discoveredNodes,
-            backgroundColor: backgroundColors[colorIndex]
-        };
-        requestCounter++;
-
-        reply.view('client', context);
-    }});
-
-server.route({
-    method: 'GET',
-    path: '/{filename*}',
-    handler: function (request, reply) {
-        //console.log('GET /{filename*}', request.path);
-
-        return reply.file('.' + request.path);
-    }
-});
-
-////////////////////////////////////////////////////////////////////////
 
 
 
@@ -272,10 +207,53 @@ function delayEnterWorkLeave() {
 
 function testRA() {
   syncLog('testRA');
-  numTests = 1;
+  numTests = 3;
   delayEnterWorkLeave();
 }
 
+
+
+////////////////////////////////////////////////////////////////////////
+// WebUI and API Stuff
+
+var Hapi = require('hapi');
+
+var server = new Hapi.Server();
+var c = server.connection();  // Uncomment to force port to 8000... { port: 8000 });
+server.networkChange = function (nodeList) {
+  if (discoveryLocked) {
+    syncLog('networkChange IGNORED. Discover is LOCKED');
+  }
+  else {
+    discoveredNodes = updateNodeList(nodeList);
+  }
+};
+
+server.views({
+  engines: {
+    html: require('handlebars')
+  },
+  isCached: false,    // Useful when using livereload
+  path: __dirname // Path.join(__dirname, 'client')
+});
+
+
+//
+// Status Route
+//
+
+server.route({
+    method: 'GET',
+    path: '/',
+    handler: function (request, reply) {
+        var context = {
+            host: myHost,
+            port: myPort,
+            nodes: discoveredNodes
+        };
+
+        reply.view('STATUS', context);
+    }});
 
 //
 // Routes that handle RA Messages
@@ -285,32 +263,16 @@ server.route({
     method: 'GET',
     path: '/REQUEST',
     handler: function (request, reply) {
-        var colorIndex = (requestCounter % backgroundColors.length);
-        var context = {
-            host: myHost,
-            port: myPort,
-            nodes: discoveredNodes,
-            backgroundColor: backgroundColors[colorIndex]
-        };
-
         handleREQUEST(request);
-        reply.view('ACK', context);
+        reply.view('REQUEST');
     }});
 
 server.route({
     method: 'GET',
     path: '/REPLY',
     handler: function (request, reply) {
-        var colorIndex = (requestCounter % backgroundColors.length);
-        var context = {
-            host: myHost,
-            port: myPort,
-            nodes: discoveredNodes,
-            backgroundColor: backgroundColors[colorIndex]
-        };
-
         handleREPLY(request);
-        reply.view('ACK', context);
+        reply.view('REPLY');
     }});
 
 
@@ -330,7 +292,7 @@ server.start(function () {
   // syncLog('randomDelay(5000, 100000)', randomDelay(5000, 100000));
   // process.exit();
 
-  var discoveryDelay = 5000;
+  var discoveryDelay = 10000;
   syncLog('### Discovery Initiated for ', discoveryDelay, 'ms');
 
   serverDiscovery.startDiscovery(myHost, myPort, server.networkChange);
@@ -346,17 +308,5 @@ server.start(function () {
 
       testRA();
     }, discoveryDelay ); // Wait 10secs to open all processes.
-
-
-  // On MacOSX, enable auto-open of the browser.
-  if (process.platform === 'darwin') {
-    var exec = require('child_process').exec;
-    var myCmd = 'open -g http://' + myHost + ':' + myPort;
-    exec(myCmd,  function (error, stdout, stderr) {
-        if (error !== null) {
-          syncLog('exec error: ' + error);
-        }
-    });
-  }
 });
 
