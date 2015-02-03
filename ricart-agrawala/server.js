@@ -5,7 +5,7 @@
 //   - Discovery
 //
 // This file is also responsible for maintaining the state of a Site for the purposes
-// of the election algorithm. We will be using the terminology and description from:
+// of the algorithm. We will be using the terminology and description from:
 //    [Distributed Computing: Principles, Algorithms, and Systems](http://www.cs.uic.edu/~ajayk/Chapter9.pdf)
 // and:
 //    [WikiPedia](http://en.wikipedia.org/wiki/Ricart–Agrawala_algorithm)
@@ -14,6 +14,9 @@
 
 var myHost = null;
 var myPort = null;
+
+var participantsChosen = false;
+var participatingNodes = [];
 
 
 //
@@ -44,25 +47,6 @@ var Util = require('util');
 // Discovery and self-identification
 //
 var serverDiscovery = require('./server-discovery.js');
-
-var discoveryLocked = false;
-var discoveredNodes = [];
-
-function updateNodeList(nodeList) {
-  var sortedList = nodeList.slice();
-  sortedList.sort(
-    function(left, right) {
-      return left.advertisement.myPort > right.advertisement.myPort;
-    });
-  var result = sortedList.map(
-    function(element) {
-      var advertisement = element.advertisement;
-      var url = 'http://' + advertisement.myHost + ':' + advertisement.myPort;
-      console.log('map:', advertisement);
-      return url;
-    });
-  return result;
-}
 
 
 
@@ -111,19 +95,21 @@ function workLeave() {
 
 var request = require('request');
 
+function handleRequestResponse(error, response, body) {
+  if (error || response.statusCode != 200) {
+    syncLog('    handleREQUESTResponse ERROR', error, response, body);
+  }
+}
+
 function sendREQUEST() {
   syncLog('sendREQUEST');
   entryREQUESTed = true;
-  numPendingREPLY = discoveredNodes.length - 1;
+  numPendingREPLY = participatingNodes.length - 1;
 
-  function handleResponse(error, response, body) {
-    if (error || response.statusCode != 200) {
-      syncLog('    SENT sendREQUEST to ', site, ' RESPONSE:', response.body);
-    }
-  }
 
-  for (var i = 0; i < discoveredNodes.length; ++i) {
-    var site = discoveredNodes[i];
+
+  for (var i = 0; i < participatingNodes.length; ++i) {
+    var site = participatingNodes[i];
     var url = site + '/REQUEST';
     syncLog('  sendREQUEST to ', url);
 
@@ -137,18 +123,12 @@ function sendREQUEST() {
         qs:       {'senderTS': 0, 'senderID': site}
     };
 
-    request(options, handleResponse);
+    request(options, handleRequestResponse);
   }
 }
 
 function sendREPLY(targetID) {
   syncLog('sendREPLY(', targetID, ')');
-
-  function handleResponse(error, response, body) {
-    if (error || response.statusCode != 200) {
-      syncLog('    SENT sendREPLY to ', site, ' RESPONSE:', response.body);
-    }
-  }
 
   var site = targetID;
   var url = site + '/REPLY';
@@ -164,7 +144,7 @@ function sendREPLY(targetID) {
       qs:       {'senderTS': 0, 'senderID': 0}
   };
 
-  request(options, handleResponse);
+  request(options, handleRequestResponse);
 }
 
 function handleREQUEST(msg) {
@@ -212,34 +192,47 @@ function testRA() {
 }
 
 
+function participantsChanged(nodeList) {
+  if (participantsChosen) {
+    syncLog('participantsChanged IGNORED. Discover is LOCKED');
+  }
+  else {
+    // Update participatingNodes
+    var sortedList = nodeList.slice();
+    sortedList.sort(
+      function(left, right) {
+        return left.advertisement.myPort > right.advertisement.myPort;
+      });
+    participatingNodes = sortedList.map(
+      function(element) {
+        var advertisement = element.advertisement;
+        var url = 'http://' + advertisement.myHost + ':' + advertisement.myPort;
+        return url;
+      });
+  }
+};
 
 ////////////////////////////////////////////////////////////////////////
 // WebUI and API Stuff
 
-var Hapi = require('hapi');
 
+var Hapi = require('hapi');
 var server = new Hapi.Server();
-var c = server.connection();  // Uncomment to force port to 8000... { port: 8000 });
-server.networkChange = function (nodeList) {
-  if (discoveryLocked) {
-    syncLog('networkChange IGNORED. Discover is LOCKED');
-  }
-  else {
-    discoveredNodes = updateNodeList(nodeList);
-  }
-};
 
 server.views({
   engines: {
     html: require('handlebars')
   },
   isCached: false,    // Useful when using livereload
-  path: __dirname // Path.join(__dirname, 'client')
+  path: __dirname     // Path.join(__dirname, 'client')
 });
 
+// Declare the connection BEFORE the routes
+//  To use an explicit port...   server.connection({ port: 8000 });
+server.connection();
 
 //
-// Status Route
+// STATUS, REQUEST, REPLY Routes
 //
 
 server.route({
@@ -247,17 +240,13 @@ server.route({
     path: '/',
     handler: function (request, reply) {
         var context = {
-            host: myHost,
-            port: myPort,
-            nodes: discoveredNodes
+            host:   myHost,
+            port:   myPort,
+            nodes:  participatingNodes
         };
 
         reply.view('STATUS', context);
     }});
-
-//
-// Routes that handle RA Messages
-//
 
 server.route({
     method: 'GET',
@@ -276,8 +265,10 @@ server.route({
     }});
 
 
+//
+// Main Server Startup
+//
 server.start(function () {
-  myHost = server.info.host;
   var ip = require('ip');
   myHost = ip.address();
   myPort = server.info.port;
@@ -286,27 +277,31 @@ server.start(function () {
 
   syncLog('Server started at: ' + myURI);
 
-  // syncLog('randomDelay(0, 1000)', randomDelay(0, 1000));
-  // syncLog('randomDelay(1000, 2000)', randomDelay(1000, 2000));
-  // syncLog('randomDelay(0, 5000)', randomDelay(0, 5000));
-  // syncLog('randomDelay(5000, 100000)', randomDelay(5000, 100000));
-  // process.exit();
-
   var discoveryDelay = 10000;
   syncLog('### Discovery Initiated for ', discoveryDelay, 'ms');
 
-  serverDiscovery.startDiscovery(myHost, myPort, server.networkChange);
+  serverDiscovery.startDiscovery(myHost, myPort, participantsChanged);
 
   setTimeout(
     function () {
-      discoveryLocked = true;
-      syncLog('### Discovery Complete and Locked. Site list is:');
+      participantsChosen = true;
+      syncLog('### Discovery Complete and Locked. Participant list is:');
 
-      for (var i = 0; i < discoveredNodes.length; ++i) {
-        syncLog('   [', i, '] ', discoveredNodes[i]);
+      for (var i = 0; i < participatingNodes.length; ++i) {
+        syncLog('   [', i, '] ', participatingNodes[i]);
       }
 
       testRA();
     }, discoveryDelay ); // Wait 10secs to open all processes.
 });
+
+
+// Javascript Debugging (uncomment and move before server.start to use):
+//
+// syncLog('randomDelay(0, 1000)', randomDelay(0, 1000));
+// syncLog('randomDelay(1000, 2000)', randomDelay(1000, 2000));
+// syncLog('randomDelay(0, 5000)', randomDelay(0, 5000));
+// syncLog('randomDelay(5000, 100000)', randomDelay(5000, 100000));
+// process.exit();
+
 
