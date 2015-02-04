@@ -77,9 +77,10 @@ function buildPID(host, port) {
 //
 
 function padRight(str, len) {
+  str = String(str);
   var padLength = len - str.length + 1;
   var result = (padLength > 0) ?
-                  str + (Array(padLength).join('.')) :
+                  str + (Array(padLength).join(' ')) :
                   str;
   return result;
 }
@@ -89,9 +90,9 @@ function padRight(str, len) {
 
 function syncLog() {  // uses 'arguments'
   var args = Array.prototype.slice.call(arguments, 0);
-  var header = '[' + state + '  ' + myPID + ']';
+  var header = '[' + state + ' TS: ' + padRight(TS, 3) + ' ' + myPID + ']';
   var paddedHeader = padRight(header, 40);
-  var data = header + '   ' + args.join('  ');
+  var data = paddedHeader + '   ' + args.join('  ');
   FS.appendFileSync(configSyncLog, data + '\n');
   console.log(data);
 }
@@ -190,7 +191,8 @@ function broadcastRD() {
 function handleREQUEST(msg) {
   syncLog('handleREQUEST:', msg.path, ' TS:', msg.query.senderTS, ' ID:', msg.query.senderPID);
   observedTS = Math.max(observedTS, msg.query.senderTS);
-  if ((state === stateREQUEST) &&
+  var requestingOrWorking = (state === stateREQUEST) || (state === stateWORK);
+  if (requestingOrWorking &&
       ((msg.query.senderTS > TS) ||
        ((msg.query.senderTS === TS) && (msg.query.senderPID > myPID)))) {
     RD.push(msg.query.senderPID);
