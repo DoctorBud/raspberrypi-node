@@ -27,12 +27,14 @@ var FS = require('fs');
 // Not part of the algorithm, but needed to set up the distributed environment
 // and participants list.
 
-var configDiscoveryDelay = 10000;
+var configDiscoveryDelay = 2000;
 var configNumTests = 3;
 var configGapTimeLow = 100;
 var configGapTimeHigh = 2000;
 var configWorkTimeLow = 2000;
 var configWorkTimeHigh = 5000;
+var configCleanupDelay = 5000;
+var configSyncLog = 'sharedLog.txt';
 
 
 // All my State is living up here at the top of file because
@@ -53,14 +55,16 @@ var participatingNodes = null;  // List of PIDs discovered before Lockout
                               // Each PID is a URI http://host:port
 var RD = [];  // Request-Deferred array (I'm just using a list of PIDs)
 var TS = 0;   // Lamport-style logical clock, incremented to T+1 upon a request with TS T.
+var observedTS = 0;   // Lamport-style logical clock, incremented to T+1 upon a request with TS T.
 
-var entryREQUESTed = false;
 var numPendingREPLY = 0;
 
-var stateINIT = 0;
-var stateGAP = 1;
-var stateREQUEST = 2;
-var stateWORKING = 3;
+var stateINIT =     'INIT   ';
+var stateGAP =      'GAP    ';
+var stateREQUEST =  'REQUEST';
+var stateWORK =     'WORK   ';
+var stateLEAVE =    'LEAVE  ';
+var stateCLEANUP =  'CLEANUP';
 var state = stateINIT;
 
 
@@ -69,14 +73,26 @@ function buildPID(host, port) {
 }
 
 //
-// Synchronous logging to a shared log file (log.txt)
+// Synchronous logging to a shared log file (configSyncLog)
 //
 
-var syncLogFile = 'log.txt';
+function padRight(str, len) {
+  var padLength = len - str.length + 1;
+  var result = (padLength > 0) ?
+                  str + (Array(padLength).join('.')) :
+                  str;
+  return result;
+}
+
+// console.log('padRight("hello", 10)=', padRight("hello", 10));
+// process.exit();
+
 function syncLog() {  // uses 'arguments'
   var args = Array.prototype.slice.call(arguments, 0);
-  var data = '[' + myPID + ']\n  ' + Util.format(args);
-  FS.appendFileSync(syncLogFile, data + '\n');
+  var header = '[' + state + '  ' + myPID + ']';
+  var paddedHeader = padRight(header, 40);
+  var data = header + '   ' + args.join('  ');
+  FS.appendFileSync(configSyncLog, data + '\n');
   console.log(data);
 }
 
@@ -88,22 +104,6 @@ function randomDelay(low, high) {
 }
 
 
-function workLeave() {
-  var workTime = randomDelay(configWorkTimeLow, configWorkTimeHigh);
-  syncLog('Work', workTime);
-  setTimeout(
-    function () {
-      syncLog('Leave');
-      numTestsRemaining--;
-      if (numTestsRemaining > 0) {
-        enterStateGAP();
-      }
-      else {
-        syncLog('Testing Complete');
-        process.exit();
-      }
-    }, workTime);
-}
 
 var request = require('request');
 
@@ -113,29 +113,34 @@ function handleRequestResponse(error, response, body) {
   }
 }
 
-function sendREQUEST() {
-  syncLog('sendREQUEST');
-  entryREQUESTed = true;
-  numPendingREPLY = participatingNodes.length - 1;
+
+function broadcastREQUEST() {
+  syncLog('broadcastREQUEST');
 
   for (var i = 0; i < participatingNodes.length; ++i) {
     var site = participatingNodes[i];
-    var url = site + '/REQUEST';
-    syncLog('  sendREQUEST to ', url);
+    if (site === myPID) {
+      syncLog('  INHIBIT broadcastREQUEST to SELF:', url);
+    }
+    else {
+      var url = site + '/REQUEST';
+      syncLog('  broadcastREQUEST to ', url);
 
-    var options = {
-        url:      url,
-        method:   'GET',
-        headers:  {
-                      'User-Agent':       'Super Agent/0.0.1',
-                      'Content-Type':     'application/x-www-form-urlencoded'
-                  },
-        qs:       {'senderTS': 0, 'senderID': site}
-    };
+      var options = {
+          url:      url,
+          method:   'GET',
+          headers:  {
+                        'User-Agent':       'Super Agent/0.0.1',
+                        'Content-Type':     'application/x-www-form-urlencoded'
+                    },
+          qs:       {'senderTS': TS, 'senderPID': myPID}
+      };
 
-    request(options, handleRequestResponse);
+      request(options, handleRequestResponse);
+    }
   }
 }
+
 
 function sendREPLY(targetID) {
   syncLog('sendREPLY(', targetID, ')');
@@ -151,24 +156,130 @@ function sendREPLY(targetID) {
                     'User-Agent':       'Super Agent/0.0.1',
                     'Content-Type':     'application/x-www-form-urlencoded'
                 },
-      qs:       {'senderTS': 0, 'senderID': 0}
+      qs:       {'senderTS': 0, 'senderPID': 0}
   };
 
   request(options, handleRequestResponse);
 }
 
-function handleREQUEST(msg) {
-  syncLog('handleREQUEST:', msg.path, ' TS:', msg.query.senderTS, ' ID:', msg.query.senderID);
-  sendREPLY(msg.query.senderID);
-}
 
-function handleREPLY(msg) {
-  --numPendingREPLY;
-  syncLog('handleREPLY:', msg.path, ' TS:', msg.query.senderTS, ' ID:', msg.query.senderID, ' PENDING:', numPendingREPLY);
-  if (numPendingREPLY <= 0) {
-    workLeave();
+
+function broadcastRD() {
+  syncLog('broadcastRD', RD);
+
+  for (var i = 0; i < RD.length; ++i) {
+    var site = RD[i];
+    var url = site + '/REPLY';
+    syncLog('  REPLY to RD[' + i + ']', url);
+
+    var options = {
+        url:      url,
+        method:   'GET',
+        headers:  {
+                      'User-Agent':       'Super Agent/0.0.1',
+                      'Content-Type':     'application/x-www-form-urlencoded'
+                  },
+        qs:       {'senderTS': TS, 'senderPID': myPID}
+    };
+
+    request(options, handleRequestResponse);
   }
 }
+
+
+function handleREQUEST(msg) {
+  syncLog('handleREQUEST:', msg.path, ' TS:', msg.query.senderTS, ' ID:', msg.query.senderPID);
+  observedTS = Math.max(observedTS, msg.query.senderTS);
+  if ((state === stateREQUEST) &&
+      ((msg.query.senderTS > TS) ||
+       ((msg.query.senderTS === TS) && (msg.query.senderPID > myPID)))) {
+    RD.push(msg.query.senderPID);
+  }
+  else {
+    sendREPLY(msg.query.senderPID);
+  }
+}
+
+
+function handleREPLY(msg) {
+  syncLog('handleREPLY:', msg.path, ' TS:', msg.query.senderTS, ' ID:', msg.query.senderPID);
+  observedTS = Math.max(observedTS, msg.query.senderTS);
+
+  --numPendingREPLY;
+  if (state != stateREQUEST) {
+    syncLog(' handleREPLY ERROR... Not in stateREQUEST');
+  }
+  else if (numPendingREPLY <= 0) {
+    enterStateWORK();
+  }
+}
+
+
+
+function enterStateCLEANUP() {
+  syncLog('enterStateCLEANUP', configCleanupDelay);
+  state = stateCLEANUP;
+  setTimeout(
+    function () {
+      syncLog('CLEANUP complete... Exiting process');
+      process.exit();
+    }, configCleanupDelay);
+}
+
+
+var configDebugLock = 'debug.lock';
+
+function debugLockEnable() {
+  if (FS.existsSync(configDebugLock)) {
+    syncLog('debugLockEnable ERROR lock already exists');
+    process.exit();
+  }
+  else {
+    FS.mkdirSync(configDebugLock);
+  }
+}
+
+
+function debugLockDisable() {
+  if (!FS.existsSync(configDebugLock)) {
+    syncLog('debugLockEnable ERROR lock does not exist');
+    process.exit();
+  }
+  else {
+    FS.rmdirSync(configDebugLock);
+  }
+}
+
+function enterStateLEAVE() {
+  syncLog('enterStateLEAVE');
+
+  state = stateLEAVE;
+  debugLockDisable();
+
+  broadcastRD();
+  numTestsRemaining--;
+  if (numTestsRemaining > 0) {
+    enterStateGAP();
+  }
+  else {
+    syncLog('Testing Complete');
+    enterStateCLEANUP();
+  }
+}
+
+
+function enterStateWORK() {
+  var workTime = randomDelay(configWorkTimeLow, configWorkTimeHigh);
+  syncLog('enterStateWORK', 'workTime', workTime);
+
+  state = stateWORK;
+  debugLockEnable();
+  setTimeout(
+    function () {
+      enterStateLEAVE();
+    }, workTime);
+}
+
 
 
 function enterStateREQUEST() {
@@ -177,30 +288,42 @@ function enterStateREQUEST() {
   //
   // Prepare the RD array, which will begin accumulating deferred
   // requests
-  // .... TBD
+  //
 
-  state = stateREQUEST;
+  RD = [];
+  TS = observedTS + 1;
+  numPendingREPLY = participatingNodes.length - 1;
 
   //
-  // We can't do work until we Enter the CS
-  // So we have to async the work part using a continuation
+  // Hack in case we are the only node.
   //
-  sendREQUEST();
+  if (numPendingREPLY === 0) {
+    syncLog('  INHIBIT broadcastREQUEST for degenerate single-node case');
+    enterStateWORK();
+  }
+  else {
+    //
+    // We can't do work until we Enter the CS
+    // So we have to async the work part using a continuation
+    //
+    state = stateREQUEST;
+    broadcastREQUEST();
+  }
 }
 
 
 
 function enterStateGAP() {
-  syncLog('enterStateGAP');
   var delayTime = randomDelay(configGapTimeLow, configGapTimeHigh);
-  syncLog('delay', delayTime);
+  syncLog('enterStateGAP', 'delayTime', delayTime);
   state = stateGAP;
 
   setTimeout(
     function () {
-        enterStateREQUEST();
+      enterStateREQUEST();
     }, delayTime);
 }
+
 
 //
 // We'll perform configNumTests sequences of:
@@ -212,6 +335,7 @@ function enterStateGAP() {
 function beginSimulation() {
   syncLog('beginSimulation... configNumTests:', configNumTests);
   numTestsRemaining = configNumTests;
+  TS = 0;
   enterStateGAP();
 }
 
